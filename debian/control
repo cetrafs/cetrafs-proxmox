@@ -1,0 +1,21 @@
+Source: pve-storage-cetrafs
+Section: perl
+Priority: optional
+Maintainer: Massimo Cetra <mcetra@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Build-Depends-Indep: libpve-storage-perl (>= 9.0)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: pve-storage-cetrafs
+Architecture: all
+Depends: libpve-storage-perl (>= 9.0), ${misc:Depends}, ${perl:Depends}
+Recommends: cetrafs-dkms, cetrafs-tools
+Description: Proxmox VE storage plugin for the cetrafs clustered filesystem
+ cetrafs is a clustered, shared-disk Linux filesystem: several nodes mount
+ one shared block device (an iSCSI or FC LUN) at the same time, with VM disk
+ images living directly on the one volume, the way VMFS backs vSphere.
+ .
+ This package adds a 'cetrafs' storage type to Proxmox VE, which mounts the
+ shared volume on every node and exposes it as shared storage for VM images,
+ container volumes, ISOs, templates and backups.

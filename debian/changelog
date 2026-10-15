@@ -1,0 +1,5 @@
+pve-storage-cetrafs (0.1.0) unstable; urgency=medium
+
+  * Initial release: 'cetrafs' storage type for Proxmox VE.
+
+ -- Massimo Cetra <mcetra@gmail.com>  Thu, 15 Oct 2026 18:43:22 +0000

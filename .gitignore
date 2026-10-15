@@ -1,0 +1,7 @@
+/dist/
+/debian/pve-storage-cetrafs/
+/debian/.debhelper/
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper.log
+/debian/debhelper-build-stamp
