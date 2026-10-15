@@ -1,3 +1,9 @@
+pve-storage-cetrafs (0.1.1) unstable; urgency=medium
+
+  * Accept the LUN of a PVE iscsi storage as 'base', like LVM over iSCSI.
+
+ -- Massimo Cetra <mcetra@gmail.com>  Thu, 15 Oct 2026 19:57:09 +0000
+
 pve-storage-cetrafs (0.1.0) unstable; urgency=medium
 
   * Initial release: 'cetrafs' storage type for Proxmox VE.

@@ -28,4 +28,13 @@ my $cfg = { type => 'cetrafs', 'cetrafs-device' => '/dev/disk/by-id/wwn-0x1' };
 $plugin->check_config('store1', $cfg, 1, 1);
 is($cfg->{path}, '/mnt/pve/store1', 'default mount path');
 
+$cfg = { type => 'cetrafs', base => 'san:0.0.0.scsi-36001405abcdef' };
+ok(eval { $plugin->check_config('store2', $cfg, 1, 1); 1 }, 'base instead of device');
+
+$cfg = { type => 'cetrafs' };
+ok(!eval { $plugin->check_config('store3', $cfg, 1, 1); 1 }, 'device or base required');
+
+$cfg = { type => 'cetrafs', 'cetrafs-device' => '/dev/sdb', base => 'san:0.0.0.scsi-1' };
+ok(!eval { $plugin->check_config('store4', $cfg, 1, 1); 1 }, 'not both device and base');
+
 done_testing();

@@ -34,6 +34,20 @@ and the LUN formatted once with `mkfs.cetra`.
 pvesm add cetrafs san1 --cetrafs-device /dev/disk/by-id/wwn-0x... --content images,rootdir
 ```
 
+### Over iSCSI
+
+Like LVM over iSCSI: let PVE log every node in to the target with a built-in
+`iscsi` storage, then point the cetrafs storage at one of its LUNs with
+`base`. The iSCSI storage is activated automatically before the mount.
+
+```sh
+pvesm add iscsi san-iscsi --portal 192.168.1.10 --target iqn.2026-10.example:san --content none
+pvesm list san-iscsi        # -> san-iscsi:0.0.0.scsi-36001405...
+pvesm add cetrafs san1 --base san-iscsi:0.0.0.scsi-36001405... --content images,rootdir
+```
+
+Exactly one of `cetrafs-device` or `base` must be set.
+
 The mount point defaults to `/mnt/pve/<storeid>`. Extra mount options go in
 `--options`.
 

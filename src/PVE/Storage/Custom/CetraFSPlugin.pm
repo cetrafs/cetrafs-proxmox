@@ -3,7 +3,11 @@ package PVE::Storage::Custom::CetraFSPlugin;
 # Proxmox VE storage plugin for cetrafs, a clustered shared-disk filesystem.
 #
 # Every node mounts the same shared LUN (iSCSI / FC) with `mount -t cetrafs`
-# and the volume is then used like a directory storage. The storage is always
+# and the volume is then used like a directory storage.
+#
+# The LUN is given either directly ('cetrafs-device') or, like LVM over iSCSI,
+# as a LUN of a PVE 'iscsi' storage ('base'). PVE::Storage::activate_storage
+# activates the base storage (iSCSI login) before ours. The storage is always
 # shared: cetrafs coordinates the nodes through the disk itself (SCSI COMPARE
 # AND WRITE), so no cluster-level locking is needed on our side.
 
@@ -56,7 +60,7 @@ sub plugindata {
 }
 
 # Property names are global across all storage plugins, so ours are prefixed.
-# 'path' and 'options' are reused from the built-in plugins.
+# 'path', 'options' and 'base' are reused from the built-in plugins.
 sub properties {
     return {
         'cetrafs-device' => {
@@ -71,7 +75,8 @@ sub properties {
 sub options {
     return {
         path => { fixed => 1 },
-        'cetrafs-device' => { fixed => 1 },
+        'cetrafs-device' => { fixed => 1, optional => 1 },
+        base => { fixed => 1, optional => 1 },
         options => { optional => 1 },
         nodes => { optional => 1 },
         disable => { optional => 1 },
@@ -91,12 +96,27 @@ sub options {
 sub check_config {
     my ($class, $sectionId, $config, $create, $skipSchemaCheck) = @_;
 
-    $config->{path} = "/mnt/pve/$sectionId" if $create && !$config->{path};
+    if ($create) {
+        $config->{path} = "/mnt/pve/$sectionId" if !$config->{path};
+
+        die "exactly one of 'cetrafs-device' or 'base' is required\n"
+            if !!$config->{'cetrafs-device'} == !!$config->{base};
+    }
 
     return $class->SUPER::check_config($sectionId, $config, $create, $skipSchemaCheck);
 }
 
 # Helpers
+
+sub cetrafs_device_path {
+    my ($scfg) = @_;
+
+    if (my $base = $scfg->{base}) {
+        return PVE::Storage::path(PVE::Storage::config(), $base);
+    }
+
+    return $scfg->{'cetrafs-device'};
+}
 
 sub cetrafs_is_mounted {
     my ($scfg, $mountdata) = @_;
@@ -112,7 +132,7 @@ sub cetrafs_is_mounted {
 sub cetrafs_mount {
     my ($scfg, $storeid) = @_;
 
-    my $device = $scfg->{'cetrafs-device'};
+    my $device = cetrafs_device_path($scfg);
     die "cetrafs device '$device' is not a block device\n" if !-b $device;
 
     # TODO: online migration needs the image open on two nodes at once
@@ -126,6 +146,20 @@ sub cetrafs_mount {
 }
 
 # Storage implementation
+
+sub on_add_hook {
+    my ($class, $storeid, $scfg, %param) = @_;
+
+    if (my $base = $scfg->{base}) {
+        my ($baseid) = PVE::Storage::parse_volume_id($base);
+
+        my $basecfg = PVE::Storage::storage_config(PVE::Storage::config(), $baseid, 1);
+        die "base storage ID '$baseid' does not exist\n" if !$basecfg;
+        die "unsupported base type '$basecfg->{type}'\n" if $basecfg->{type} ne 'iscsi';
+    }
+
+    return undef;
+}
 
 sub status {
     my ($class, $storeid, $scfg, $cache) = @_;
@@ -170,7 +204,7 @@ sub deactivate_storage {
 sub check_connection {
     my ($class, $storeid, $scfg) = @_;
 
-    return -b $scfg->{'cetrafs-device'} ? 1 : 0;
+    return -b cetrafs_device_path($scfg) ? 1 : 0;
 }
 
 1;
