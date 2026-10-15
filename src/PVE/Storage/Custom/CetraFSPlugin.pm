@@ -135,6 +135,10 @@ sub cetrafs_mount {
     my $device = cetrafs_device_path($scfg);
     die "cetrafs device '$device' is not a block device\n" if !-b $device;
 
+    # The module is not auto-loaded by 'mount -t cetrafs' (no fs alias), so
+    # after boot nothing has loaded it yet.
+    run_command(['/sbin/modprobe', 'cetrafs'], errmsg => 'unable to load cetrafs kernel module');
+
     # TODO: online migration needs the image open on two nodes at once
     # (cetrafs 'nofilelock' mount option) - decide whether to always mount
     # with it or to toggle it around the migration.

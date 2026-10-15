@@ -40,7 +40,6 @@ iSCSI storage `san-iscsi` and cetrafs storage `san1`. Replace them.
 ```sh
 apt install cetrafs-dkms cetrafs-tools open-iscsi
 dpkg -i pve-storage-cetrafs_<version>_all.deb
-modprobe cetrafs
 ```
 
 Install on **all** nodes before adding the storage: a node without the plugin
@@ -136,6 +135,11 @@ pvesm status --storage san1        # active
 findmnt /mnt/pve/san1              # FSTYPE cetrafs, SOURCE the iSCSI LUN
 iscsiadm -m session                # logged in to the target
 ```
+
+The storage is mounted again automatically after a reboot: pvestatd
+activates it at startup (iSCSI login, `modprobe cetrafs`, mount), before
+guest autostart runs. No `/etc/fstab` entry is needed, and there must not be
+one.
 
 If it is not active, `journalctl -u pvestatd -u pvedaemon` shows the mount
 error.
