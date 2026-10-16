@@ -42,7 +42,7 @@ for my $dev (qw(/dev/sdb /dev/sdb1 /dev/dm-3 /dev/vda /dev/nvme0n1 /dev/nvme0n1p
     ok(!eval { $plugin->check_config('store5', $cfg, 1, 1); 1 }, "unstable path $dev refused");
 }
 
-for my $dev (qw(/dev/disk/by-id/wwn-0x1 /dev/mapper/mpatha /dev/disk/by-id/dm-name-foo)) {
+for my $dev (qw(/dev/disk/by-id/wwn-0x1 /dev/mapper/mpatha /dev/mapper/36001405000000000000000000000b001 /dev/disk/by-id/dm-name-foo)) {
     $cfg = { type => 'cetrafs', 'cetrafs-device' => $dev };
     ok(eval { $plugin->check_config('store6', $cfg, 1, 1); 1 }, "stable path $dev accepted");
 }
