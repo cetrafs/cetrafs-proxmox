@@ -47,4 +47,11 @@ for my $dev (qw(/dev/disk/by-id/wwn-0x1 /dev/mapper/mpatha /dev/mapper/360014050
     ok(eval { $plugin->check_config('store6', $cfg, 1, 1); 1 }, "stable path $dev accepted");
 }
 
+is(PVE::Storage::Custom::CetraFSPlugin::cetrafs_mount_options({}), 'nofilelock',
+    'nofilelock by default');
+is(PVE::Storage::Custom::CetraFSPlugin::cetrafs_mount_options({ options => 'noatime' }),
+    'noatime,nofilelock', 'nofilelock added to user options');
+is(PVE::Storage::Custom::CetraFSPlugin::cetrafs_mount_options({ options => 'nofilelock,noatime' }),
+    'nofilelock,noatime', 'nofilelock not duplicated');
+
 done_testing();

@@ -139,7 +139,6 @@ the LUN mounted nowhere (mkfs refuses a volume a live peer has mounted). See
 pvesm add cetrafs san1 \
     --base san-iscsi:0.0.1.scsi-36001405abc... \
     --path /mnt/pve/san1 \
-    --options nofilelock \
     --content images,rootdir,iso,vztmpl,backup
 ```
 
@@ -147,10 +146,12 @@ pvesm add cetrafs san1 \
 - `--path` — the mount point, the same on every node. Optional (defaults to
   `/mnt/pve/<storeid>`) and created if missing. It cannot be changed later
   without removing and re-adding the storage.
-- `--options` — mount options passed to `mount -t cetrafs -o ...`.
-  `nofilelock` is required for **live** migration (otherwise the target's
-  open fails with `Text file busy`); leave it out if you only migrate
-  offline. See "The `nofilelock` option" in cetrafs `docs/OPERATIONS.md`.
+- `--options` — optional extra mount options for `mount -t cetrafs -o ...`.
+  The plugin **always** adds `nofilelock`, which live migration needs (the
+  target opens the image while the source still has it open; without it the
+  open fails with `Text file busy`). PVE and qemu keep two nodes from running
+  the same guest. `nofilelock` also disables the cetrafs online defragmenter;
+  see "The `nofilelock` option" in cetrafs `docs/OPERATIONS.md`.
 - `--nodes` — optional, restrict the storage to some nodes.
 
 Add the storage **once**, on one node: `/etc/pve/storage.cfg` is cluster-wide,
@@ -173,7 +174,6 @@ cetrafs: san1
 	path /mnt/pve/san1
 	base san-iscsi:0.0.1.scsi-36001405abc...
 	content images,rootdir,iso,vztmpl,backup
-	options nofilelock
 ```
 
 ### Several LUNs on one target
@@ -192,11 +192,11 @@ each with its own mount point:
 ```sh
 pvesm add cetrafs san1 \
     --base san-iscsi:0.0.1.scsi-36001405000000000000000000000a001 \
-    --path /mnt/pve/san1 --options nofilelock --content images,rootdir
+    --path /mnt/pve/san1 --content images,rootdir
 
 pvesm add cetrafs san2 \
     --base san-iscsi:0.0.2.scsi-36001405000000000000000000000a002 \
-    --path /mnt/pve/san2 --options nofilelock --content images,rootdir
+    --path /mnt/pve/san2 --content images,rootdir
 ```
 
 ```
@@ -209,13 +209,11 @@ cetrafs: san1
 	path /mnt/pve/san1
 	base san-iscsi:0.0.1.scsi-36001405000000000000000000000a001
 	content images,rootdir
-	options nofilelock
 
 cetrafs: san2
 	path /mnt/pve/san2
 	base san-iscsi:0.0.2.scsi-36001405000000000000000000000a002
 	content images,rootdir
-	options nofilelock
 ```
 
 - The two storages are independent filesystems: separate free space,
@@ -226,8 +224,7 @@ cetrafs: san2
 - A LUN you do not add as a cetrafs storage is left alone. With
   `--content none` on the iSCSI storage PVE never offers it as a VM disk.
   Do not use it for anything else that would write to it from several nodes.
-- Each storage may use different `--options`; `nofilelock` is set per
-  cetrafs volume.
+- Each storage may use different `--options` (`nofilelock` is always on).
 
 ### 6. Verify (on each node)
 
@@ -262,7 +259,7 @@ journalctl -u pvestatd --since -10min | grep -i cetra
 | `device '/dev/mapper/...' not found on node '...'` | multipath not running (or configured differently) on that node | `systemctl enable --now multipathd`; same `multipath.conf` on every node; check `multipath -ll` |
 | `device '...' not found on node '...'` with `base` | the target does not export that LUN to this node (initiator ACL / LUN masking) | allow the node's initiator on the storage side |
 | `unable to load cetrafs kernel module` | `cetrafs-dkms` missing or not built for the running kernel | `apt install cetrafs-dkms`, check `dkms status` |
-| `mount error ...` | cetrafs refused the mount | see `dmesg`; a second mounter is refused if the LUN has no atomic COMPARE AND WRITE (step 3), or with an `options` mismatch against the nodes already mounted (`nofilelock`) |
+| `mount error ...` | cetrafs refused the mount | see `dmesg`; a second mounter is refused if the LUN has no atomic COMPARE AND WRITE (step 3), or if the nodes already mounted run the volume without `nofilelock` (mounted by hand or by plugin 0.1.2 or older): unmount it on every node |
 
 The plugin refuses `cetrafs-device` paths like `/dev/sdX` or `/dev/dm-N`:
 the same LUN gets a different kernel name on each node (and after each
@@ -320,9 +317,6 @@ storage to its node so PVE refuses such migrations:
 pvesm add cetrafs cetra1 --cetrafs-device $DEV --path /mnt/pve/cetra1 \
     --nodes $(hostname) --content images,rootdir
 ```
-
-`--options nofilelock` is not needed on a single node (it only matters for
-live migration).
 
 ### Removing
 

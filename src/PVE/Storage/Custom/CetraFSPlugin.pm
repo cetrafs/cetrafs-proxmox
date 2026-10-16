@@ -144,6 +144,20 @@ sub cetrafs_is_mounted {
     return grep { $_->[1] eq $path && $_->[2] eq 'cetrafs' } @$mountdata;
 }
 
+# Always mount with 'nofilelock': without it cetrafs refuses a second open of
+# an image on another node, which breaks live migration (the target opens the
+# image while the source still has it open). Two nodes never run the same
+# guest at once - PVE's guest config ownership and HA, plus qemu's own image
+# locking, take care of that, as vSphere does on VMFS.
+sub cetrafs_mount_options {
+    my ($scfg) = @_;
+
+    my @opts = grep { $_ ne '' } split(/,/, $scfg->{options} // '');
+    push @opts, 'nofilelock' if !grep { $_ eq 'nofilelock' } @opts;
+
+    return join(',', @opts);
+}
+
 sub cetrafs_mount {
     my ($scfg, $storeid) = @_;
 
@@ -154,12 +168,9 @@ sub cetrafs_mount {
     # after boot nothing has loaded it yet.
     run_command(['/sbin/modprobe', 'cetrafs'], errmsg => 'unable to load cetrafs kernel module');
 
-    # TODO: online migration needs the image open on two nodes at once
-    # (cetrafs 'nofilelock' mount option) - decide whether to always mount
-    # with it or to toggle it around the migration.
-    my $cmd = ['/bin/mount', '-t', 'cetrafs'];
-    push @$cmd, '-o', $scfg->{options} if $scfg->{options};
-    push @$cmd, $device, $scfg->{path};
+    my $cmd = [
+        '/bin/mount', '-t', 'cetrafs', '-o', cetrafs_mount_options($scfg), $device, $scfg->{path},
+    ];
 
     run_command($cmd, errmsg => "mount error for storage '$storeid'");
 }
