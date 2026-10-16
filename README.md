@@ -241,20 +241,58 @@ one.
 If it is not active, `journalctl -u pvestatd -u pvedaemon` shows the mount
 error.
 
-### Without the iSCSI storage
+### Without the iSCSI storage (any block device)
 
-If the LUN is already attached to every node some other way (FC, iSCSI set
-up by hand, multipath), point at the device directly instead of `--base`:
+If the device is already there without PVE logging in to anything (FC,
+iSCSI set up by hand, multipath, or any local block device such as a
+device-mapper or LVM volume), skip the iSCSI storage and point at the device
+directly with `--cetrafs-device` instead of `--base`:
 
 ```sh
-pvesm add cetrafs san1 --cetrafs-device /dev/mapper/36001405abc... --path /mnt/pve/san1
+DEV=/dev/mapper/whatever
+
+# once, from one node (steps 3 and 4 above)
+modprobe cetrafs caw_probe=$DEV && dmesg | tail
+mkfs.cetra $DEV
+
+# once, from any node
+pvesm add cetrafs cetra1 \
+    --cetrafs-device $DEV \
+    --path /mnt/pve/cetra1 \
+    --content images,rootdir
 ```
 
-Use a path that is the same on every node (`/dev/disk/by-id/...` or the
-multipath `/dev/mapper/<wwid>`), never `/dev/sdX`. Exactly one of
-`--cetrafs-device` and `--base` must be set. With multipath prefer this form:
-`--base` resolves to the LUN's `/dev/disk/by-id/scsi-*` link, which is not
-guaranteed to be the multipath device.
+Exactly one of `--cetrafs-device` and `--base` must be set. Like `--path`,
+the device cannot be changed later without re-adding the storage.
+
+**Use a stable device path.** Never `/dev/sdX` or `/dev/dm-N`: those numbers
+are assigned in discovery or activation order and can change between boots.
+Use:
+
+- `/dev/mapper/<name>` (the device-mapper name; for multipath the WWID or
+  its alias),
+- `/dev/disk/by-id/dm-uuid-...` or `/dev/disk/by-id/dm-name-...`,
+- `/dev/disk/by-id/wwn-...` / `scsi-...` for a plain SCSI or FC disk.
+
+**Shared device: the same path on every node.** Every node using the
+storage must see the device under the same path. For multipath, use the same
+alias on all nodes, or `user_friendly_names no` so the name is the WWID. With
+multipath prefer this form over `--base`: `--base` resolves to the LUN's
+`/dev/disk/by-id/scsi-*` link, which is not guaranteed to be the multipath
+device.
+
+**Device only one node can see: restrict with `--nodes`.** A cetrafs storage
+is always marked shared, so PVE assumes every node can reach the device and
+migrates guests without copying their disks. For a local device, limit the
+storage to its node so PVE refuses such migrations:
+
+```sh
+pvesm add cetrafs cetra1 --cetrafs-device $DEV --path /mnt/pve/cetra1 \
+    --nodes $(hostname) --content images,rootdir
+```
+
+`--options nofilelock` is not needed on a single node (it only matters for
+live migration).
 
 ### Removing
 
