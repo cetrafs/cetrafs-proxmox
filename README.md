@@ -54,6 +54,22 @@ cannot use (or even parse) the `cetrafs` entry in `/etc/pve/storage.cfg`.
 
 ### 2. Add the iSCSI storage (once, from any node)
 
+Discover the targets the portal offers:
+
+```sh
+pvesm scan iscsi 192.168.1.10
+# iqn.2026-10.example:san        192.168.1.10:3260
+# iqn.2026-10.example:other      192.168.1.10:3260
+```
+
+Pick the target that exports the LUN(s) for cetrafs and use its IQN as
+`--target` below. (`iscsiadm -m discovery -t sendtargets -p 192.168.1.10`
+gives the same list; a portal on a non-default port is `<ip>:<port>`.)
+
+If the target requires CHAP, or only accepts listed initiators, allow every
+node's initiator name (`cat /etc/iscsi/initiatorname.iscsi`) on the storage
+side first.
+
 ```sh
 pvesm add iscsi san-iscsi \
     --portal 192.168.1.10 \
