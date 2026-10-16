@@ -32,6 +32,13 @@ node in to the target; the `cetrafs` storage references one of its LUNs as
 `base` (the same pattern as LVM over iSCSI) and mounts it on each node. PVE
 activates the iSCSI storage automatically before mounting.
 
+**One iSCSI storage per target, one cetrafs storage per LUN.** The `iscsi`
+storage logs in to the whole target, and every LUN the target exports shows
+up as one of its volumes. A cetrafs volume lives on exactly one LUN, so each
+LUN you want to use gets its own `cetrafs` storage (its own filesystem, mount
+point and `mkfs.cetra`). A target with a single LUN is just the simplest
+case; see "Several LUNs on one target" below for more.
+
 The examples use portal `192.168.1.10`, target `iqn.2026-10.example:san`,
 iSCSI storage `san-iscsi` and cetrafs storage `san1`. Replace them.
 
@@ -58,14 +65,34 @@ pvesm add iscsi san-iscsi \
 step can also be done in the web UI (Datacenter → Storage → Add → iSCSI,
 untick "Use LUNs directly").
 
-Find the LUN's volume id and its device:
+List the LUNs the target exports. There is one line per LUN:
 
 ```sh
 pvesm list san-iscsi
 # Volid                               Format  Type    Size
-# san-iscsi:0.0.0.scsi-36001405abc... raw     images  ...
-ls -l /dev/disk/by-id/scsi-36001405abc...
+# san-iscsi:0.0.1.scsi-36001405abc... raw     images  ...
 ```
+
+The volume id is `<iscsi storage>:<channel>.<id>.<lun>.<device id>`: the
+third number is the LUN number and `scsi-3...` is the LUN's WWID. Always
+refer to LUNs by volume id or WWID, never by `/dev/sdX`, whose names can
+swap between boots.
+
+To see which LUN is which (number, size, local device):
+
+```sh
+iscsiadm -m session -P 3 | grep -E 'Lun:|Attached scsi disk'
+#   scsi8 Channel 00 Id 0 Lun: 1
+#       Attached scsi disk sdd    State: running
+lsblk -o NAME,SIZE,WWN /dev/sdd
+ls -l /dev/disk/by-id/scsi-36001405abc...    # -> ../../sdd
+```
+
+Two devices with **different** WWIDs are two LUNs. The **same** WWID on two
+devices (usually through two portals) is one LUN seen over two paths: that
+is multipath, see "Without the iSCSI storage" below.
+
+Steps 3 to 5 are per LUN: repeat them for each LUN you want to use.
 
 ### 3. Check the LUN supports clustering (once)
 
@@ -128,6 +155,55 @@ cetrafs: san1
 	options nofilelock
 ```
 
+### Several LUNs on one target
+
+Example: a target exporting LUN 1 and LUN 2.
+
+```sh
+pvesm list san-iscsi
+# san-iscsi:0.0.1.scsi-36001405000000000000000000000a001   raw  images  ...
+# san-iscsi:0.0.2.scsi-36001405000000000000000000000a002   raw  images  ...
+```
+
+Format each LUN you will use (step 4), then add one cetrafs storage per LUN,
+each with its own mount point:
+
+```sh
+pvesm add cetrafs san1     --base san-iscsi:0.0.1.scsi-36001405000000000000000000000a001     --path /mnt/pve/san1 --options nofilelock --content images,rootdir
+
+pvesm add cetrafs san2     --base san-iscsi:0.0.2.scsi-36001405000000000000000000000a002     --path /mnt/pve/san2 --options nofilelock --content images,rootdir
+```
+
+```
+iscsi: san-iscsi
+	portal 192.168.1.10
+	target iqn.2026-10.example:san
+	content none
+
+cetrafs: san1
+	path /mnt/pve/san1
+	base san-iscsi:0.0.1.scsi-36001405000000000000000000000a001
+	content images,rootdir
+	options nofilelock
+
+cetrafs: san2
+	path /mnt/pve/san2
+	base san-iscsi:0.0.2.scsi-36001405000000000000000000000a002
+	content images,rootdir
+	options nofilelock
+```
+
+- The two storages are independent filesystems: separate free space,
+  separate mounts, and disabling or removing one does not affect the other.
+  One cetrafs storage cannot span several LUNs.
+- They share the one iSCSI storage and session; activating the second finds
+  the target already logged in.
+- A LUN you do not add as a cetrafs storage is left alone. With
+  `--content none` on the iSCSI storage PVE never offers it as a VM disk.
+  Do not use it for anything else that would write to it from several nodes.
+- Each storage may use different `--options`; `nofilelock` is set per
+  cetrafs volume.
+
 ### 6. Verify (on each node)
 
 ```sh
@@ -162,12 +238,20 @@ guaranteed to be the multipath device.
 ### Removing
 
 Stop or move the guests using it first. PVE neither unmounts nor logs out
-when a storage is disabled or removed, so do it by hand:
+when a storage is disabled or removed, so do it by hand.
+
+Remove one cetrafs storage (other LUNs on the same target keep working):
 
 ```sh
-pvesm set san1 --disable 1                               # stop PVE re-mounting it
-umount /mnt/pve/san1                                     # on every node
+pvesm set san1 --disable 1          # stop PVE re-mounting it
+umount /mnt/pve/san1                # on every node
 pvesm remove san1
+```
+
+Once **no** cetrafs storage uses the target any more, remove the iSCSI
+storage and log out:
+
+```sh
 pvesm remove san-iscsi
 iscsiadm -m node -T iqn.2026-10.example:san --logout     # on every node
 ```
