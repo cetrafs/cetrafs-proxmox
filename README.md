@@ -120,7 +120,7 @@ the LUN mounted nowhere (mkfs refuses a volume a live peer has mounted). See
 
 ```sh
 pvesm add cetrafs san1 \
-    --base san-iscsi:0.0.0.scsi-36001405abc... \
+    --base san-iscsi:0.0.1.scsi-36001405abc... \
     --path /mnt/pve/san1 \
     --options nofilelock \
     --content images,rootdir,iso,vztmpl,backup
@@ -150,7 +150,7 @@ iscsi: san-iscsi
 
 cetrafs: san1
 	path /mnt/pve/san1
-	base san-iscsi:0.0.0.scsi-36001405abc...
+	base san-iscsi:0.0.1.scsi-36001405abc...
 	content images,rootdir,iso,vztmpl,backup
 	options nofilelock
 ```
@@ -169,9 +169,13 @@ Format each LUN you will use (step 4), then add one cetrafs storage per LUN,
 each with its own mount point:
 
 ```sh
-pvesm add cetrafs san1     --base san-iscsi:0.0.1.scsi-36001405000000000000000000000a001     --path /mnt/pve/san1 --options nofilelock --content images,rootdir
+pvesm add cetrafs san1 \
+    --base san-iscsi:0.0.1.scsi-36001405000000000000000000000a001 \
+    --path /mnt/pve/san1 --options nofilelock --content images,rootdir
 
-pvesm add cetrafs san2     --base san-iscsi:0.0.2.scsi-36001405000000000000000000000a002     --path /mnt/pve/san2 --options nofilelock --content images,rootdir
+pvesm add cetrafs san2 \
+    --base san-iscsi:0.0.2.scsi-36001405000000000000000000000a002 \
+    --path /mnt/pve/san2 --options nofilelock --content images,rootdir
 ```
 
 ```
