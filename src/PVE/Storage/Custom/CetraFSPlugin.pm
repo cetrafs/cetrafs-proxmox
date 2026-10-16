@@ -231,6 +231,9 @@ sub check_connection {
     my $node = PVE::INotify::nodename();
     die "device '$device' not found on node '$node' - the LUN is not attached to this node\n"
         if $scfg->{base};
+    die "device '$device' not found on node '$node' - is multipathd running and configured"
+        . " the same on every node?\n"
+        if $device =~ m!^/dev/mapper/!;
     die "device '$device' not found on node '$node' - with 'cetrafs-device' every node must"
         . " already see the device (attach / log in to it on each node, or use 'base' with a"
         . " PVE iscsi storage)\n";

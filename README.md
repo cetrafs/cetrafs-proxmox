@@ -259,6 +259,7 @@ journalctl -u pvestatd --since -10min | grep -i cetra
 |---|---|---|
 | `skip section '...': unsupported type 'cetrafs'` | plugin not installed on that node | install `pve-storage-cetrafs` there; it is picked up without re-adding the storage |
 | `device '...' not found on node '...'` with `cetrafs-device` | that node does not see the device (e.g. iSCSI logged in by hand on one node only) | attach / log in to the device on every node, or switch to `--base` with a PVE iscsi storage, which logs every node in |
+| `device '/dev/mapper/...' not found on node '...'` | multipath not running (or configured differently) on that node | `systemctl enable --now multipathd`; same `multipath.conf` on every node; check `multipath -ll` |
 | `device '...' not found on node '...'` with `base` | the target does not export that LUN to this node (initiator ACL / LUN masking) | allow the node's initiator on the storage side |
 | `unable to load cetrafs kernel module` | `cetrafs-dkms` missing or not built for the running kernel | `apt install cetrafs-dkms`, check `dkms status` |
 | `mount error ...` | cetrafs refused the mount | see `dmesg`; a second mounter is refused if the LUN has no atomic COMPARE AND WRITE (step 3), or with an `options` mismatch against the nodes already mounted (`nofilelock`) |
@@ -301,8 +302,11 @@ Use:
 - `/dev/disk/by-id/wwn-...` / `scsi-...` for a plain SCSI or FC disk.
 
 **Shared device: the same path on every node.** Every node using the
-storage must see the device under the same path. For multipath, use the same
-alias on all nodes, or `user_friendly_names no` so the name is the WWID. With
+storage must see the device under the same path. For multipath, run
+`multipathd` on **every** node (`systemctl enable --now multipathd`) with the
+same `multipath.conf`, and use the same alias on all nodes or
+`user_friendly_names no` so the name is the WWID. Check with `multipath -ll`
+and `ls -l /dev/mapper/<name>` on each node before adding the storage. With
 multipath prefer this form over `--base`: `--base` resolves to the LUN's
 `/dev/disk/by-id/scsi-*` link, which is not guaranteed to be the multipath
 device.
