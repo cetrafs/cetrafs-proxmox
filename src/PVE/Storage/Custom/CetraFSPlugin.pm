@@ -16,6 +16,7 @@ use warnings;
 
 use Cwd ();
 
+use PVE::INotify;
 use PVE::ProcFSTools;
 use PVE::Storage;
 use PVE::Storage::Plugin;
@@ -101,12 +102,26 @@ sub check_config {
 
         die "exactly one of 'cetrafs-device' or 'base' is required\n"
             if !!$config->{'cetrafs-device'} == !!$config->{base};
+
+        if (my $device = $config->{'cetrafs-device'}) {
+            die "cetrafs-device '$device' is not a stable device path: kernel names like"
+                . " /dev/sdX or /dev/dm-N can differ between nodes and boots - use"
+                . " /dev/disk/by-id/... or /dev/mapper/<name>\n"
+                if is_unstable_device_path($device);
+        }
     }
 
     return $class->SUPER::check_config($sectionId, $config, $create, $skipSchemaCheck);
 }
 
 # Helpers
+
+# Kernel-assigned names, numbered in discovery/activation order.
+sub is_unstable_device_path {
+    my ($device) = @_;
+
+    return $device =~ m!^/dev/(?:[shv]d[a-z]+|xvd[a-z]+|dm-\d+|nvme\d+n\d+)(?:p?\d+)?$!;
+}
 
 sub cetrafs_device_path {
     my ($scfg) = @_;
@@ -205,10 +220,20 @@ sub deactivate_storage {
     }
 }
 
+# Runs on every node that activates the storage (pvestatd polls it), so this
+# is where a node that cannot see the shared device gets reported.
 sub check_connection {
     my ($class, $storeid, $scfg) = @_;
 
-    return -b cetrafs_device_path($scfg) ? 1 : 0;
+    my $device = cetrafs_device_path($scfg);
+    return 1 if -b $device;
+
+    my $node = PVE::INotify::nodename();
+    die "device '$device' not found on node '$node' - the LUN is not attached to this node\n"
+        if $scfg->{base};
+    die "device '$device' not found on node '$node' - with 'cetrafs-device' every node must"
+        . " already see the device (attach / log in to it on each node, or use 'base' with a"
+        . " PVE iscsi storage)\n";
 }
 
 1;

@@ -153,6 +153,10 @@ pvesm add cetrafs san1 \
   offline. See "The `nofilelock` option" in cetrafs `docs/OPERATIONS.md`.
 - `--nodes` — optional, restrict the storage to some nodes.
 
+Add the storage **once**, on one node: `/etc/pve/storage.cfg` is cluster-wide,
+so every node already has it (running `pvesm add` again elsewhere fails with
+`storage ID '...' already defined`). Nothing has to be run on the other nodes.
+
 The storage is always marked shared, so migration does not copy its disks.
 Each node mounts it automatically: pvestatd activates every enabled storage
 when it polls (about every 10 s), and any guest start does too.
@@ -240,6 +244,28 @@ one.
 
 If it is not active, `journalctl -u pvestatd -u pvedaemon` shows the mount
 error.
+
+### Troubleshooting: mounted on only one node
+
+The node where you ran `pvesm add` mounts immediately; every other node
+mounts on its own on pvestatd's next poll. If a node does not, look at its
+log (pvestatd retries, and logs the error, every ~10 s):
+
+```sh
+journalctl -u pvestatd --since -10min | grep -i cetra
+```
+
+| Message | Cause | Fix |
+|---|---|---|
+| `skip section '...': unsupported type 'cetrafs'` | plugin not installed on that node | install `pve-storage-cetrafs` there; it is picked up without re-adding the storage |
+| `device '...' not found on node '...'` with `cetrafs-device` | that node does not see the device (e.g. iSCSI logged in by hand on one node only) | attach / log in to the device on every node, or switch to `--base` with a PVE iscsi storage, which logs every node in |
+| `device '...' not found on node '...'` with `base` | the target does not export that LUN to this node (initiator ACL / LUN masking) | allow the node's initiator on the storage side |
+| `unable to load cetrafs kernel module` | `cetrafs-dkms` missing or not built for the running kernel | `apt install cetrafs-dkms`, check `dkms status` |
+| `mount error ...` | cetrafs refused the mount | see `dmesg`; a second mounter is refused if the LUN has no atomic COMPARE AND WRITE (step 3), or with an `options` mismatch against the nodes already mounted (`nofilelock`) |
+
+The plugin refuses `cetrafs-device` paths like `/dev/sdX` or `/dev/dm-N`:
+the same LUN gets a different kernel name on each node (and after each
+boot), so they would mount the wrong disk or none.
 
 ### Without the iSCSI storage (any block device)
 
