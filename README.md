@@ -66,9 +66,10 @@ Pick the target that exports the LUN(s) for cetrafs and use its IQN as
 `--target` below. (`iscsiadm -m discovery -t sendtargets -p 192.168.1.10`
 gives the same list; a portal on a non-default port is `<ip>:<port>`.)
 
-If the target requires CHAP, or only accepts listed initiators, allow every
-node's initiator name (`cat /etc/iscsi/initiatorname.iscsi`) on the storage
-side first.
+If the target only accepts listed initiators, allow every node's initiator
+name (`cat /etc/iscsi/initiatorname.iscsi`) on the storage side first. PVE's
+iSCSI storage has no CHAP option: if the target requires CHAP, set
+`node.session.auth.*` in `/etc/iscsi/iscsid.conf` on every node.
 
 ```sh
 pvesm add iscsi san-iscsi \
