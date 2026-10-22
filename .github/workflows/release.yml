@@ -1,0 +1,156 @@
+# Build the Debian package and publish a release.
+#
+# Tag push (0.2, 0.1.4, ...) or manual dispatch. Re-running for a tag
+# REPLACES that tag's release, assets and all.
+#
+# Built in a Debian 13 container with the Proxmox VE 9 repository enabled:
+# the package build depends on libpve-storage-perl, and dh_auto_test runs the
+# plugin tests against it (they load PVE::Storage). The Proxmox archive
+# keyring is vendored in .github/ (fingerprint 24B30F06ECC1836A4E5EFECBA7BCD1420BFE778E,
+# Proxmox Trixie Release Key) rather than downloaded at build time.
+#
+# The tests here only check that the plugin loads and validates its config.
+# Mounting, multi-node activation and live migration need a real cluster
+# and a shared LUN, and are checked there before a tag is cut.
+name: release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release (must already exist)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:13
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Which tag are we building
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install git
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git ca-certificates
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Install build dependencies (Proxmox VE 9 repository)
+        run: |
+          install -m 0644 .github/proxmox-archive-keyring.gpg /usr/share/keyrings/proxmox-archive-keyring.gpg
+          cat > /etc/apt/sources.list.d/pve.sources <<'EOF'
+          Types: deb
+          URIs: http://download.proxmox.com/debian/pve
+          Suites: trixie
+          Components: pve-no-subscription
+          Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+          EOF
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential debhelper dpkg-dev fakeroot libpve-storage-perl
+
+      - name: The tag must match debian/changelog
+        id: version
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          CL="$(dpkg-parsechangelog -S Version)"
+          TAG="${{ steps.tag.outputs.tag }}"
+          if [ "$CL" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match debian/changelog $CL -- the changelog is the single source of the version"
+            exit 1
+          fi
+          echo "version=$CL" >> "$GITHUB_OUTPUT"
+
+      # dpkg-buildpackage runs dh_auto_test, i.e. `make test`.
+      - name: Build the package
+        run: make deb
+
+      - name: The package must carry the plugin and the restart trigger
+        run: |
+          DEB="dist/pve-storage-cetrafs_${{ steps.version.outputs.version }}_all.deb"
+          dpkg-deb -c "$DEB" | grep -q './usr/share/perl5/PVE/Storage/Custom/CetraFSPlugin.pm$' \
+            || { echo "::error::the package does not ship the plugin"; exit 1; }
+          dpkg-deb -I "$DEB" triggers | grep -q 'pve-api-updates' \
+            || { echo "::error::the package does not activate pve-api-updates"; exit 1; }
+
+      - name: Keep the changelog entry for the notes
+        run: dpkg-parsechangelog -S Changes | tail -n +3 | sed 's/^\.$//; s/^  //' > dist/changes.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest        # gh is preinstalled here; debian:13 has no gh
+    steps:
+      - name: Which tag are we releasing
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+
+      - name: Assemble the release notes
+        env:
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          {
+            echo "## pve-storage-cetrafs $V"
+            echo
+            cat dist/changes.txt
+            echo
+            echo "### Install"
+            echo
+            echo "On **every** node of the cluster:"
+            echo
+            echo '```sh'
+            echo "apt install ./pve-storage-cetrafs_${V}_all.deb"
+            echo '```'
+            echo
+            echo "Needs Proxmox VE 9 and the cetrafs kernel module (cetrafs-dkms) on each"
+            echo "node. The Proxmox services are restarted automatically on install."
+            echo "See the README for setting up a cetrafs storage."
+          } > notes.md
+          cat notes.md
+
+      - name: Replace any existing release for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          # Delete rather than edit: editing keeps the previous build's
+          # assets, and a stale .deb beside a fresh one is worse than no
+          # release. --cleanup-tag=false keeps the git tag itself.
+          gh release delete "$TAG" --yes --cleanup-tag=false --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create "$TAG" dist/*.deb \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "pve-storage-cetrafs $TAG" \
+            --notes-file notes.md
