@@ -1,3 +1,12 @@
+pve-storage-cetrafs (0.2) unstable; urgency=medium
+
+  * GitHub Actions release workflow: a version tag builds the .deb and
+    publishes a GitHub release.
+  * Tests can be skipped with the nocheck build profile/option, which also
+    drops the libpve-storage-perl build dependency.
+
+ -- Massimo Cetra <mcetra@gmail.com>  Thu, 22 Oct 2026 18:03:36 +0000
+
 pve-storage-cetrafs (0.1.3) unstable; urgency=medium
 
   * Always mount with nofilelock, so live migration works.
