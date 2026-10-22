@@ -32,15 +32,16 @@ version tag is pushed to the GitHub remote:
 
 ```sh
 # 1. new debian/changelog entry, e.g. 0.1.4, committed
-# 2. tag it with exactly the changelog version and push the tag
+# 2. test locally, on a Proxmox VE host
+make test
+# 3. tag it with exactly the changelog version and push the tag
 git tag 0.1.4
 git push gh master 0.1.4
 ```
 
-The workflow builds the package in a Debian 13 container with the Proxmox VE
-9 repository (it runs `make test` against `libpve-storage-perl`), and
-publishes a GitHub release named after the tag with the `.deb` and the
-changelog entry as notes. It fails if the tag does not match
+The workflow does not run the tests: it builds the package in a plain Debian
+13 container with the `nocheck` build profile, and publishes a GitHub release
+named after the tag with the `.deb` and the changelog entry as notes. It fails if the tag does not match
 `debian/changelog`. Re-running it (or "Run workflow" with an existing tag)
 replaces that tag's release.
 

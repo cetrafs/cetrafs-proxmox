@@ -3,7 +3,7 @@ Section: perl
 Priority: optional
 Maintainer: Massimo Cetra <mcetra@gmail.com>
 Build-Depends: debhelper-compat (= 13)
-Build-Depends-Indep: libpve-storage-perl (>= 9.0)
+Build-Depends-Indep: libpve-storage-perl (>= 9.0) <!nocheck>
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 
