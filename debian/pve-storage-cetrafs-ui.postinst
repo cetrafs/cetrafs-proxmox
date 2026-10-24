@@ -1,0 +1,25 @@
+#!/bin/sh
+
+set -e
+
+# pveproxy lists the files under /pve2/js/ when it starts, so it must be
+# reloaded to serve cetrafs-ui.js.
+reload_pveproxy() {
+    if [ -d /run/systemd/system ]; then
+        systemctl try-reload-or-restart pveproxy.service || true
+    fi
+}
+
+case "$1" in
+    configure|triggered)
+        # Don't fail the postinst (or a pve-manager upgrade via the trigger)
+        # if the template can't be written.
+        sh /usr/share/pve-storage-cetrafs-ui/cetrafs-ui-index apply \
+            || echo "pve-storage-cetrafs-ui: could not update index.html.tpl, web UI integration not active" >&2
+        reload_pveproxy
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

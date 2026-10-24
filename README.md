@@ -9,8 +9,9 @@ storage (VM images, container volumes, ISOs, templates, backups).
 
 ```
 src/PVE/Storage/Custom/CetraFSPlugin.pm   the plugin (installed to /usr/share/perl5/PVE/Storage/Custom/)
+ui/                                       optional web UI integration (package pve-storage-cetrafs-ui)
 t/                                        tests (run with `make test`, needs a PVE host / libpve-storage-perl)
-debian/                                   packaging for pve-storage-cetrafs
+debian/                                   packaging for pve-storage-cetrafs and pve-storage-cetrafs-ui
 ```
 
 PVE loads every module under `PVE/Storage/Custom/` at startup. The package
@@ -23,6 +24,7 @@ pveproxy, pvestatd and pvescheduler after install or upgrade.
 apt install build-essential debhelper devscripts
 make test
 make deb          # -> dist/pve-storage-cetrafs_<version>_all.deb
+                  #    dist/pve-storage-cetrafs-ui_<version>_all.deb
 ```
 
 ## Releasing
@@ -71,6 +73,12 @@ dpkg -i pve-storage-cetrafs_<version>_all.deb
 
 Install on **all** nodes before adding the storage: a node without the plugin
 cannot use (or even parse) the `cetrafs` entry in `/etc/pve/storage.cfg`.
+
+Optionally also install the web UI integration (see "Web UI" below):
+
+```sh
+dpkg -i pve-storage-cetrafs-ui_<version>_all.deb
+```
 
 ### 2. Add the iSCSI storage (once, from any node)
 
@@ -337,6 +345,44 @@ storage to its node so PVE refuses such migrations:
 pvesm add cetrafs cetra1 --cetrafs-device $DEV --path /mnt/pve/cetra1 \
     --nodes $(hostname) --content images,rootdir
 ```
+
+### Web UI (optional)
+
+The `pve-storage-cetrafs-ui` package adds the storage type to the web
+interface: **Datacenter → Storage → Add → CetraFS** (step 5 above), and
+**Edit** for existing cetrafs storages. Without it everything works the same,
+but cetrafs storages are managed with `pvesm` and listed with type "Unknown".
+
+In the Add dialog, **Source** picks between a LUN of a PVE iSCSI storage
+(`--base`: choose the iSCSI storage, then the LUN) and a block device path
+(`--cetrafs-device`). Mount point and mount options are optional, as with
+`pvesm`. Formatting (`mkfs.cetra`) and the COMPARE AND WRITE check (steps 3
+and 4) are still done on the command line.
+
+Install it on every node whose web UI you use (it only affects the UI served
+by that node). It depends on the plugin package of the same version.
+
+pve-manager has no interface for UI plugins, so the package installs
+`/usr/share/pve-manager/js/cetrafs-ui.js` and adds a `<script>` tag for it to
+`/usr/share/pve-manager/index.html.tpl`, then reloads pveproxy. Consequences:
+
+- A pve-manager upgrade replaces the template; a dpkg trigger re-adds the
+  tag right after. Reload the browser tab (Ctrl+F5) after installing or
+  upgrading.
+- `dpkg --verify pve-manager` reports `index.html.tpl` as modified.
+- If a future pve-manager changes the template or the storage UI in a way
+  the integration does not recognise, it disables itself (a warning in the
+  install output or the browser console) instead of breaking the UI.
+
+To check or redo the tag by hand:
+
+```sh
+sh /usr/share/pve-storage-cetrafs-ui/cetrafs-ui-index status && echo present
+sh /usr/share/pve-storage-cetrafs-ui/cetrafs-ui-index apply
+systemctl reload pveproxy
+```
+
+`apt remove pve-storage-cetrafs-ui` removes the tag again.
 
 ### Removing
 

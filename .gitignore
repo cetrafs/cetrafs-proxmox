@@ -1,5 +1,7 @@
 /dist/
 /debian/pve-storage-cetrafs/
+/debian/pve-storage-cetrafs-ui/
+/debian/tmp/
 /debian/.debhelper/
 /debian/files
 /debian/*.substvars
