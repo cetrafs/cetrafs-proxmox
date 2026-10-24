@@ -73,13 +73,18 @@ jobs:
           DEB_BUILD_OPTIONS: nocheck
         run: make deb
 
-      - name: The package must carry the plugin and the restart trigger
+      - name: The packages must carry their files and triggers
         run: |
           DEB="dist/pve-storage-cetrafs_${{ steps.version.outputs.version }}_all.deb"
           dpkg-deb -c "$DEB" | grep -q './usr/share/perl5/PVE/Storage/Custom/CetraFSPlugin.pm$' \
             || { echo "::error::the package does not ship the plugin"; exit 1; }
           dpkg-deb -I "$DEB" triggers | grep -q 'pve-api-updates' \
             || { echo "::error::the package does not activate pve-api-updates"; exit 1; }
+          UI="dist/pve-storage-cetrafs-ui_${{ steps.version.outputs.version }}_all.deb"
+          dpkg-deb -c "$UI" | grep -q './usr/share/pve-manager/js/cetrafs-ui.js$' \
+            || { echo "::error::the UI package does not ship cetrafs-ui.js"; exit 1; }
+          dpkg-deb -I "$UI" triggers | grep -q 'index.html.tpl' \
+            || { echo "::error::the UI package does not watch index.html.tpl"; exit 1; }
 
       - name: Keep the changelog entry for the notes
         run: dpkg-parsechangelog -S Changes | tail -n +3 | sed 's/^\.$//; s/^  //' > dist/changes.txt
@@ -126,6 +131,13 @@ jobs:
             echo
             echo "Needs Proxmox VE 9 and the cetrafs kernel module (cetrafs-dkms) on each"
             echo "node. The Proxmox services are restarted automatically on install."
+            echo
+            echo "Optional web UI integration (Datacenter -> Storage -> Add -> CetraFS),"
+            echo "on every node whose web UI you use:"
+            echo
+            echo '```sh'
+            echo "apt install ./pve-storage-cetrafs-ui_${V}_all.deb"
+            echo '```'
             echo "See the README for setting up a cetrafs storage."
           } > notes.md
           cat notes.md

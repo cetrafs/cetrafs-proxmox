@@ -19,3 +19,17 @@ Description: Proxmox VE storage plugin for the cetrafs clustered filesystem
  This package adds a 'cetrafs' storage type to Proxmox VE, which mounts the
  shared volume on every node and exposes it as shared storage for VM images,
  container volumes, ISOs, templates and backups.
+
+Package: pve-storage-cetrafs-ui
+Architecture: all
+Section: admin
+Depends: pve-manager (>= 9.0), pve-storage-cetrafs (= ${binary:Version}), ${misc:Depends}
+Description: Proxmox VE web UI integration for cetrafs storage (optional)
+ Adds the 'cetrafs' storage type to the Proxmox VE web interface:
+ Datacenter -> Storage -> Add -> CetraFS, and editing existing cetrafs
+ storages. Without it the storage works the same but is managed with pvesm
+ and listed as "Unknown" in the web UI.
+ .
+ pve-manager has no UI plugin interface, so this package adds a script tag to
+ /usr/share/pve-manager/index.html.tpl and re-adds it whenever pve-manager is
+ upgraded. Removing the package removes the tag.

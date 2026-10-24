@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    remove)
+        if [ -d /run/systemd/system ]; then
+            systemctl try-reload-or-restart pveproxy.service || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

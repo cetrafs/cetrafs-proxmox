@@ -1,0 +1,74 @@
+#!/bin/sh
+# Add or remove the cetrafs UI <script> tag in the PVE web UI index template.
+#
+#   cetrafs-ui-index apply     insert the tag (idempotent)
+#   cetrafs-ui-index revert    remove it
+#   cetrafs-ui-index status    exit 0 if present, 1 if not
+#
+# pve-manager has no hook for UI plugins, so the tag goes into its
+# index.html.tpl, right after pvemanagerlib.js. A pve-manager upgrade
+# overwrites the template; the package's file trigger on it runs 'apply'
+# again. Never fails on a template it does not recognise: a broken trigger
+# would break pve-manager upgrades, a missing UI integration only means
+# managing the storage with pvesm.
+
+set -e
+
+INDEX="${CETRAFS_UI_INDEX:-/usr/share/pve-manager/index.html.tpl}"
+MARK='<!-- pve-storage-cetrafs-ui -->'
+
+version() {
+    if [ -n "$CETRAFS_UI_VERSION" ]; then
+        echo "$CETRAFS_UI_VERSION"
+    else
+        dpkg-query -W -f='${Version}' pve-storage-cetrafs-ui 2>/dev/null || echo 0
+    fi
+}
+
+# Write stdin to $INDEX, replacing it atomically. Only the last command of a
+# pipeline sets its exit status, so an earlier stage failing shows up here as
+# short input: refuse to install anything that is empty or lost
+# pvemanagerlib.js, as that would blank the web UI.
+replace_index() {
+    tmp="$INDEX.cetrafs-ui.$$"
+    if cat > "$tmp" && [ -s "$tmp" ] && grep -q 'pvemanagerlib\.js' "$tmp"; then
+        chmod 0644 "$tmp" && mv -f "$tmp" "$INDEX" && return 0
+    fi
+    rm -f "$tmp"
+    echo "cetrafs-ui: could not write $INDEX, left unchanged" >&2
+    return 1
+}
+
+strip_tag() {
+    awk -v mark="$MARK" 'index($0, mark) == 0' "$INDEX"
+}
+
+case "$1" in
+    apply)
+        if [ ! -f "$INDEX" ]; then
+            echo "cetrafs-ui: $INDEX not found, web UI integration not installed" >&2
+            exit 0
+        fi
+        if ! grep -q 'pvemanagerlib\.js' "$INDEX"; then
+            echo "cetrafs-ui: no pvemanagerlib.js in $INDEX, web UI integration not installed" >&2
+            exit 0
+        fi
+        line="    <script type=\"text/javascript\" src=\"/pve2/js/cetrafs-ui.js?ver=$(version)\"></script> $MARK"
+        strip_tag | awk -v line="$line" '
+            { print }
+            /pvemanagerlib\.js/ && !done { print line; done = 1 }
+        ' | replace_index
+        ;;
+    revert)
+        [ -f "$INDEX" ] || exit 0
+        grep -qF "$MARK" "$INDEX" || exit 0
+        strip_tag | replace_index
+        ;;
+    status)
+        [ -f "$INDEX" ] && grep -qF "$MARK" "$INDEX"
+        ;;
+    *)
+        echo "usage: $0 apply|revert|status" >&2
+        exit 2
+        ;;
+esac
