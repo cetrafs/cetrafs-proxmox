@@ -1,3 +1,10 @@
+pve-storage-cetrafs (0.3) unstable; urgency=medium
+
+  * New optional package pve-storage-cetrafs-ui: adds CetraFS to the web UI
+    (Datacenter -> Storage -> Add / Edit). Contributed by gyptazy.
+
+ -- Massimo Cetra <mcetra@gmail.com>  Sun, 25 Oct 2026 15:43:36 +0000
+
 pve-storage-cetrafs (0.2) unstable; urgency=medium
 
   * GitHub Actions release workflow: a version tag builds the .deb and
