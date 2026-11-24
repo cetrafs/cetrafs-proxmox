@@ -1,3 +1,10 @@
+pve-storage-cetrafs (0.4) UNRELEASED; urgency=medium
+
+  * Implement storage plugin API 17, so PVE 9 no longer warns that the
+    plugin "is implementing an older storage API" (cetrafs/cetrafs#13).
+
+ -- Massimo Cetra <mcetra@gmail.com>  Tue, 24 Nov 2026 09:05:03 +0000
+
 pve-storage-cetrafs (0.3) unstable; urgency=medium
 
   * New optional package pve-storage-cetrafs-ui: adds CetraFS to the web UI

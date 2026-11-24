@@ -25,7 +25,11 @@ use PVE::Tools qw(run_command);
 use base qw(PVE::Storage::Plugin);
 
 # Highest storage plugin API version this plugin was tested against.
-use constant TESTED_APIVER => 16;
+#
+# 17: parse_volname() (inherited) returns 'vm-vol' / 'vm-state' / 'ct-vol'
+# instead of 'images' for guest volumes; nothing here compares a volume type
+# with 'images', so no change was needed.
+use constant TESTED_APIVER => 17;
 
 # The storage is the same on all nodes; let PVE treat it as shared (migration
 # without copying disks, HA, ...).
